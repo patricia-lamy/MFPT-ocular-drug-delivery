@@ -1,3 +1,6 @@
+# Python script to solve the retinal absorption for all the geometries in the
+# human ensemble and to export results in csv.
+
 import numpy as np
 import pandas as pd
 import mph
@@ -7,7 +10,7 @@ df = pd.read_csv('2023-11-04_human_eyes_set_measures.csv')
 
 # Start Comsol and import model
 client = mph.start(cores=1)
-model = client.load('../../Comsol_files/mfpt_model_pts.mph')
+model = client.load('../../Comsol_files/mfpt_model_splitting_prob_set_human_eyes.mph')
 # Change of parameters to model IgG molecule
 model.parameter('D', str(0.64e-10))
 model.parameter('hya_perm', str(0.874e-7))
@@ -88,14 +91,14 @@ for i in range(0, len(a_list)):
     arg_xos_pt = np.intersect1d(xz_intersect_0, xy_intersect_0_yos)
 
     # Evaluating solution these points:
-    mfpt_pt1 = u[arg_mid]/(3600*24)
+    mfpt_pt1 = u[arg_mid]
     print(mfpt_pt1)
-    mfpt_pt2 = u[arg_mid_q1]/(3600*24)
-    mfpt_pt3 = u[arg_mid_q2]/(3600*24)
-    mfpt_pt4 = u[arg_lens_diam_mid]/(3600*24)
-    mfpt_pt5 = u[arg_lens_diam_q1]/(3600*24)
-    mfpt_pt6 = u[arg_lens_diam_q2]/(3600*24)
-    mfpt_pt7 = u[arg_xos_pt]/(3600*24)
+    mfpt_pt2 = u[arg_mid_q1]
+    mfpt_pt3 = u[arg_mid_q2]
+    mfpt_pt4 = u[arg_lens_diam_mid]
+    mfpt_pt5 = u[arg_lens_diam_q1]
+    mfpt_pt6 = u[arg_lens_diam_q2]
+    mfpt_pt7 = u[arg_xos_pt]
     mfpt = np.array([mfpt_pt1[0], mfpt_pt2[0], mfpt_pt3[0], mfpt_pt4[0],
                     mfpt_pt5[0], mfpt_pt6[0], mfpt_pt7[0]])
 
@@ -103,14 +106,15 @@ for i in range(0, len(a_list)):
                        'b': [b],
                        'AL': [al_list[i]],
                        'volume': [vol_list[i]],
-                       '#MFPT P1 (days)': mfpt[0],
-                       '#MFPT P2 (days)': mfpt[1],
-                       '#MFPT P3 (days)': mfpt[2],
-                       '#MFPT P4 (days)': mfpt[3],
-                       '#MFPT P5 (days)': mfpt[4],
-                       '#MFPT P6 (days)': mfpt[5],
-                       '#MFPT P7 (days)': mfpt[6]
+                       '#Prop P1': mfpt[0],
+                       '#Prop P2': mfpt[1],
+                       '#Prop P3': mfpt[2],
+                       '#Prop P4': mfpt[3],
+                       '#Prop P5': mfpt[4],
+                       '#Prop P6': mfpt[5],
+                       '#Prop P7': mfpt[6]
                        })
-    df.to_csv("2023-11-04_solved_igg_mfpt_human_eyes_set.csv", index=False,
+    df.to_csv("2023-11-13_solved_igg_prob_exit_retina_human_eyes_set.csv",
+              index=False,
               header=(i == 0),
               mode='a')
