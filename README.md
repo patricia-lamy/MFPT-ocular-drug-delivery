@@ -5,8 +5,8 @@ In the folder Human_ensemble,
 - The file `mfpt_human_ensemble.ipynb` produces the MFPT results for the human ensemble geometries, corresponding to Figure 7b in the manuscript and Figure D.1 in the SI.
 - The file `vr_exit_human_ensemble.ipynb` produces the results of the proportion of drug exiting through the vitreous-retina interface, corresponding to Figure 9 in the manuscript.
 
-In the main manuscript, 
-- Figure 7a was produced using figure_mfpt_b2_fab_igg.ipynb
+In the main repository,
+- The file `figure_mfpt_comparison_species.ipynb` produces Figure 7a in the manuscript.
 
 In the Supplementary Information, 
 - Figure A.2 was produced using figure_density_over_time.ipynb, and using the data in Data/drug_qty_over_time_P2.csv
