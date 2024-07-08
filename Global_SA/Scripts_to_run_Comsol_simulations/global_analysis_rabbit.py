@@ -1,3 +1,4 @@
+# Source file used to run the simulations on Comsol.
 # Prerequesites
 
 import mph
@@ -14,11 +15,11 @@ problem = {
     'num_vars': num_vars,
     'names': ['dummy', 'a', 'b', 'lens_diam', 'lens_thick', 'h_va'],
     'bounds': [[0, 1],
-               [1.03, 1.25],        # cm
-               [0.816, 1.07],    # cm
-               [0.88, 0.985],     # cm
-               [0.391, 0.564],    # cm
-               [0.2259, 0.2761]     # cm (pm 10% on hva=0.251 cm)
+               [0.88, 0.92],        # cm
+               [0.566, 0.611],      # cm
+               [0.971, 1.019],      # cm
+               [0.606, 0.697],       # cm
+               [0.2142, 0.2618]     # cm
                ]
 }
 
@@ -27,10 +28,9 @@ total_nb_comb = sample_size*problem["num_vars"]
 print('Nb of simulations:', total_nb_comb)
 chunk_size = 6
 nb_chuncks = int(total_nb_comb / chunk_size)
-print('Nb of chucks:', nb_chuncks)
 
 client = mph.start(cores=1)
-model = client.load('mfpt_model_pts.mph')
+model = client.load('mfpt_model_rabbit.mph')
 model.build()
 print(model.parameters())
 
@@ -42,7 +42,7 @@ param_values = fast_sampler.sample(problem, sample_size, seed=42)
 # Step 2: Solving the MFPT PDE
 start = time.time()
 mfpt_list = np.empty((chunk_size, 7))
-for j in range(295, nb_chuncks):
+for j in range(0, nb_chuncks):
     print(j)
     for i in range(0, chunk_size):
         position_param = j*chunk_size + i
@@ -54,13 +54,38 @@ for j in range(295, nb_chuncks):
         h_va = param_values[position_param, 5]
         # Calculating midpoint for output
         y_lens = np.sqrt(b**2*(1 - (lens_diam/2)**2/a**2))
-        y_lens_hollow = lens_thick/2 - y_lens
+        y_lens_rabbit = y_lens - (lens_thick/7)
+        int_lens_A = a**2/b**2 - lens_diam**2/lens_thick**2
+        int_lens_B = 2*lens_diam**2*y_lens_rabbit/lens_thick**2
+        int_lens_C = (lens_diam**2/4 - a**2
+                      - (lens_diam**2/lens_thick**2)*y_lens_rabbit**2)
         h_lens = b-y_lens
         h_os = b - (h_lens + h_va)
-        y_mid = (y_lens_hollow + b)/2
-        y_q1 = b - (b - y_lens_hollow)/4
-        y_q2 = b - 3*(b - y_lens_hollow)/4
+        y_lens_inters = (- int_lens_B
+                         + np.sqrt(int_lens_B**2
+                                   - 4*int_lens_A*int_lens_C))/(2*int_lens_A)
+        x_lens_inters = np.sqrt(a**2*(1 - y_lens_inters**2/b**2))
+
+        y_mid = (lens_thick/2 - y_lens_rabbit + b)/2
+        y_q1 = (b - (b - (lens_thick/2 - y_lens_rabbit))/4)
+        y_q2 = (b - 3*(b - (lens_thick/2 - y_lens_rabbit))/4)
         x_os = np.sqrt(a**2*(1 - (h_os)**2/b**2))
+        y_lens_inters_mid = (np.sqrt(lens_thick**2/4
+                                     * (1 - x_lens_inters**2/(lens_diam**2/4)))
+                             - y_lens_rabbit
+                             + np.sqrt(b**2*(1-x_lens_inters**2/a**2)))/2
+        y_lens_inters_q1 = (np.sqrt(b**2*(1-x_lens_inters**2/a**2))
+                            - (np.sqrt(b**2*(1-x_lens_inters**2/a**2))
+                               - (np.sqrt(lens_thick**2/4
+                                          * (1 - x_lens_inters**2
+                                             / (lens_diam**2/4)))
+                                  - y_lens_rabbit))/4)
+        y_lens_inters_q2 = (np.sqrt(b**2*(1-x_lens_inters**2/a**2))
+                            - 3 * ((np.sqrt(b**2*(1-x_lens_inters**2/a**2))
+                                    - (np.sqrt(lens_thick**2/4
+                                               * (1 - x_lens_inters**2
+                                                  / (lens_diam**2/4)))
+                                       - y_lens_rabbit)))/4)
 
         # Assigning parameter values in Comsol model
         model.parameter('a', str(a) + '[cm]')
@@ -68,8 +93,8 @@ for j in range(295, nb_chuncks):
         model.parameter('lens_diam', str(lens_diam) + '[cm]')
         model.parameter('lens_thick', str(lens_thick) + '[cm]')
         model.parameter('h_va', str(h_va) + '[cm]')
-        # print(model.parameters())
         # model.build()
+        # print(model.parameters())
         model.solve()
         [x, y, z, u] = model.evaluate(['x', 'y', 'z', 'u'])
 
@@ -81,9 +106,10 @@ for j in range(295, nb_chuncks):
         z_mid = np.nonzero(np.isclose(z, y_mid))
         z_mid_q1 = np.nonzero(np.isclose(z, y_q1))
         z_mid_q2 = np.nonzero(np.isclose(z, y_q2))
-        y_lens_diam = np.nonzero(np.isclose(y, lens_diam/2))
-        z_lens_diam_q1 = np.nonzero(np.isclose(z, -y_lens/2))
-        z_lens_diam_q2 = np.nonzero(np.isclose(z, y_lens/2))
+        y_lens_inters_arg = np.nonzero(np.isclose(y, x_lens_inters))
+        z_lens_inters_mid = np.nonzero(np.isclose(z, y_lens_inters_mid))
+        z_lens_inters_q1 = np.nonzero(np.isclose(z, y_lens_inters_q1))
+        z_lens_inters_q2 = np.nonzero(np.isclose(z, y_lens_inters_q2))
         y_os_arg = np.nonzero(np.isclose(y, x_os))
 
         xy_intersect_0 = np.intersect1d(x0_arg, y0_arg)
@@ -91,15 +117,16 @@ for j in range(295, nb_chuncks):
         xz_intersect_0_zmid = np.intersect1d(x0_arg, z_mid)
         xz_intersect_0_zmidq1 = np.intersect1d(x0_arg, z_mid_q1)
         xz_intersect_0_zmidq2 = np.intersect1d(x0_arg, z_mid_q2)
-        xy_intersect_0_ylens = np.intersect1d(x0_arg, y_lens_diam)
-        xz_intersect_0_zlens_q1 = np.intersect1d(x0_arg, z_lens_diam_q1)
-        xz_intersect_0_zlens_q2 = np.intersect1d(x0_arg, z_lens_diam_q2)
+        xy_intersect_0_ylens = np.intersect1d(x0_arg, y_lens_inters_arg)
+        xz_intersect_0_zlens_mid = np.intersect1d(x0_arg, z_lens_inters_mid)
+        xz_intersect_0_zlens_q1 = np.intersect1d(x0_arg, z_lens_inters_q1)
+        xz_intersect_0_zlens_q2 = np.intersect1d(x0_arg, z_lens_inters_q2)
         xy_intersect_0_yos = np.intersect1d(x0_arg, y_os_arg)
 
         arg_mid = np.intersect1d(xy_intersect_0, xz_intersect_0_zmid)
         arg_mid_q1 = np.intersect1d(xy_intersect_0, xz_intersect_0_zmidq1)
         arg_mid_q2 = np.intersect1d(xy_intersect_0, xz_intersect_0_zmidq2)
-        arg_lens_diam_mid = np.intersect1d(xz_intersect_0,
+        arg_lens_diam_mid = np.intersect1d(xz_intersect_0_zlens_mid,
                                            xy_intersect_0_ylens)
         arg_lens_diam_q1 = np.intersect1d(xz_intersect_0_zlens_q1,
                                           xy_intersect_0_ylens)
@@ -136,7 +163,7 @@ for j in range(295, nb_chuncks):
                        '#MFPT P6 (days)': mfpt_list[:, 5],
                        '#MFPT P7 (days)': mfpt_list[:, 6]
                        })
-    df.to_csv("data/2023-11-20_human_Ns337.csv", index=False,
+    df.to_csv("data/2023-11-03_rabbit_Ns337.csv", index=False,
               header=(j == 0), mode='a')
 
 end = time.time()

@@ -1,3 +1,5 @@
+# Source file used to run the simulations on Comsol.
+
 # Prerequesites
 
 import mph
@@ -8,24 +10,28 @@ from SALib.sample import fast_sampler
 
 # Defining the problem
 # Defining model input
-sample_size = 337
-num_vars = 6
+sample_size = 385
+num_vars = 9
 problem = {
     'num_vars': num_vars,
-    'names': ['dummy', 'a', 'b', 'lens_diam', 'lens_thick', 'h_va'],
+    'names': ['dummy', 'a', 'b', 'lens_diam', 'lens_thick', 'h_va',
+              'D', 'k_va', 'k_vr'],
     'bounds': [[0, 1],
-               [0.88, 0.92],        # cm
-               [0.566, 0.611],      # cm
-               [0.971, 1.019],      # cm
-               [0.606, 0.697],       # cm
-               [0.2142, 0.2618]     # cm
+               [0.9*0.9,     1.1*0.9],            # cm
+               [0.9*0.588,   1.1*0.588],          # cm
+               [0.9*0.995,   1.1*0.995],          # cm
+               [0.9*0.66,    1.1*0.66],          # cm
+               [0.9*0.238,   1.1*0.238],        # cm
+               [0.9*1.07e-10, 1.1*1.07e-10],    # m2/s, D
+               [0.9*1.91e-7, 1.1*1.91e-7],      # m/s, k_va
+               [0.9*1.81e-9, 1.1*1.81e-9]       # m/s, k_vr
                ]
 }
 
 
 total_nb_comb = sample_size*problem["num_vars"]
 print('Nb of simulations:', total_nb_comb)
-chunk_size = 6
+chunk_size = 9
 nb_chuncks = int(total_nb_comb / chunk_size)
 
 client = mph.start(cores=1)
@@ -56,19 +62,34 @@ for j in range(0, nb_chuncks):
         y_lens_rabbit = y_lens - (lens_thick/7)
         int_lens_A = a**2/b**2 - lens_diam**2/lens_thick**2
         int_lens_B = 2*lens_diam**2*y_lens_rabbit/lens_thick**2
-        int_lens_C = lens_diam**2/4 - a**2 - (lens_diam**2/lens_thick**2)*y_lens_rabbit**2
+        int_lens_C = (lens_diam**2/4 - a**2 -
+                      (lens_diam**2/lens_thick**2)*y_lens_rabbit**2)
         h_lens = b-y_lens
         h_os = b - (h_lens + h_va)
-        y_lens_inters = (- int_lens_B + np.sqrt(int_lens_B**2 - 4*int_lens_A*int_lens_C))/(2*int_lens_A)
+        y_lens_inters = (- int_lens_B +
+                         np.sqrt(int_lens_B**2 -
+                                 4*int_lens_A*int_lens_C))/(2*int_lens_A)
         x_lens_inters = np.sqrt(a**2*(1 - y_lens_inters**2/b**2))
 
         y_mid = (lens_thick/2 - y_lens_rabbit + b)/2
         y_q1 = (b - (b - (lens_thick/2 - y_lens_rabbit))/4)
         y_q2 = (b - 3*(b - (lens_thick/2 - y_lens_rabbit))/4)
         x_os = np.sqrt(a**2*(1 - (h_os)**2/b**2))
-        y_lens_inters_mid = (np.sqrt(lens_thick**2/4 * (1 - x_lens_inters**2/(lens_diam**2/4))) - y_lens_rabbit + np.sqrt(b**2*(1-x_lens_inters**2/a**2)))/2
-        y_lens_inters_q1 = (np.sqrt(b**2*(1-x_lens_inters**2/a**2)) - (np.sqrt(b**2*(1-x_lens_inters**2/a**2)) - (np.sqrt(lens_thick**2/4 * (1 - x_lens_inters**2/(lens_diam**2/4))) - y_lens_rabbit))/4)
-        y_lens_inters_q2 = (np.sqrt(b**2*(1-x_lens_inters**2/a**2)) - 3 * ((np.sqrt(b**2*(1-x_lens_inters**2/a**2)) - (np.sqrt(lens_thick**2/4 * (1 - x_lens_inters**2/(lens_diam**2/4))) - y_lens_rabbit)))/4)
+        y_lens_inters_mid = (np.sqrt(lens_thick**2/4 *
+                                     (1 - x_lens_inters**2/(lens_diam**2/4)))
+                             - y_lens_rabbit
+                             + np.sqrt(b**2 * (1-x_lens_inters**2/a**2)))/2
+        y_lens_inters_q1 = (np.sqrt(b**2*(1-x_lens_inters**2/a**2))
+                            - (np.sqrt(b**2*(1-x_lens_inters**2/a**2))
+                               - (np.sqrt(lens_thick**2/4 *
+                                          (1 -
+                                           x_lens_inters**2/(lens_diam**2/4)))
+                               - y_lens_rabbit))/4)
+        y_lens_inters_q2 = (np.sqrt(b**2*(1-x_lens_inters**2/a**2)) - 3 *
+                            ((np.sqrt(b**2*(1-x_lens_inters**2/a**2)) -
+                              (np.sqrt(lens_thick**2/4 *
+                                       (1 - x_lens_inters**2/(lens_diam**2/4)))
+                                - y_lens_rabbit)))/4)
 
         # Assigning parameter values in Comsol model
         model.parameter('a', str(a) + '[cm]')
@@ -76,8 +97,11 @@ for j in range(0, nb_chuncks):
         model.parameter('lens_diam', str(lens_diam) + '[cm]')
         model.parameter('lens_thick', str(lens_thick) + '[cm]')
         model.parameter('h_va', str(h_va) + '[cm]')
-        #model.build()
-        #print(model.parameters())
+        model.parameter('D', str(param_values[position_param, 6]))
+        model.parameter('hya_perm', str(param_values[position_param, 7]))
+        model.parameter('ilm_perm', str(param_values[position_param, 8]))
+        # model.build()
+        # print(model.parameters())
         model.solve()
         [x, y, z, u] = model.evaluate(['x', 'y', 'z', 'u'])
 
@@ -138,6 +162,9 @@ for j in range(0, nb_chuncks):
                        '#Lens diameter': param_values[l_bd:h_bd, 3],
                        '#Lens thickness': param_values[l_bd:h_bd, 4],
                        '#Height va int': param_values[l_bd:h_bd, 5],
+                       '#Diffusion coef': param_values[l_bd:h_bd, 6],
+                       '#Perm va': param_values[l_bd:h_bd, 7],
+                       '#Perm vr': param_values[l_bd:h_bd, 8],
                        '#MFPT P1 (days)': mfpt_list[:, 0],
                        '#MFPT P2 (days)': mfpt_list[:, 1],
                        '#MFPT P3 (days)': mfpt_list[:, 2],
@@ -146,7 +173,7 @@ for j in range(0, nb_chuncks):
                        '#MFPT P6 (days)': mfpt_list[:, 5],
                        '#MFPT P7 (days)': mfpt_list[:, 6]
                        })
-    df.to_csv("data/2023-11-03_rabbit_Ns337.csv", index=False,
+    df.to_csv("data/2024-06-22_rabbit_Ns385_10percent.csv", index=False,
               header=(j == 0), mode='a')
 
 end = time.time()
